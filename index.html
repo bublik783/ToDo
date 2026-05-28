@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToDo — списки задач</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="brand__icon">✓</div>
+                <h1>ToDo</h1>
+            </div>
+
+            <nav class="category-nav" id="categoryNav" aria-label="Категории списков"></nav>
+
+            <form class="category-form" id="categoryForm" novalidate>
+                <div class="category-form__row">
+                    <input type="text" id="newCategoryInput" maxlength="24" placeholder="Новая категория">
+                    <button type="submit" aria-label="Добавить категорию">+</button>
+                </div>
+                <small class="error" id="categoryError"></small>
+            </form>
+        </aside>
+
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <main class="main">
+            <header class="topbar">
+                <button class="icon-btn mobile-menu-btn" id="menuBtn" aria-label="Открыть категории">☰</button>
+                <div class="topbar__title">
+                    <h2 id="currentCategoryTitle">Все списки</h2>
+                </div>
+
+                <div class="topbar__center">
+                    <button class="round-add-btn" id="openListModal" type="button" aria-label="Создать список">+</button>
+                    <label class="topbar-search" aria-label="Поиск задач">
+                        <input type="search" id="searchInput" placeholder="Искать задачу или список">
+                    </label>
+                    <button class="filter-icon-btn" id="toggleFiltersBtn" type="button" aria-expanded="false" aria-label="Открыть фильтры">
+                        <img src="assets/filter.png" alt="">
+                    </button>
+                </div>
+
+                <div class="topbar-actions">
+                    <button class="settings-btn" id="openSettingsBtn" type="button" aria-label="Открыть настройки">
+                        <img src="assets/settings.png" alt="">
+                    </button>
+                    <div class="profile-popover-wrap">
+                        <button class="profile-avatar-btn" id="userCard" type="button" aria-label="Профиль пользователя">
+                            <div class="avatar skeleton"></div>
+                        </button>
+                        <div class="profile-hint" id="profileHint">Это несуществующий профиль из интернета.</div>
+                    </div>
+                </div>
+            </header>
+
+            <p class="api-error" id="apiError"></p>
+
+            <section class="controls" id="filtersPanel" aria-label="Фильтры и сортировка">
+                <label>
+                    <span>Статус</span>
+                    <select id="statusFilter">
+                        <option value="Все">Все</option>
+                        <option value="active">Активные</option>
+                        <option value="done">Завершённые</option>
+                        <option value="expired">Просроченные</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Категория</span>
+                    <select id="categoryFilter">
+                        <option value="Все">Все категории</option>
+                    </select>
+                </label>
+                <label class="toggle-label">
+                    <span>Сортировка по названию</span>
+                    <input type="checkbox" id="titleSortToggle">
+                    <span class="toggle-switch" aria-hidden="true"></span>
+                </label>
+                <button class="apply-filters-btn" id="applyFiltersBtn" type="button">Применить</button>
+                <button class="ghost-btn" id="clearFiltersBtn" type="button">Сбросить</button>
+            </section>
+
+            <section class="board" id="board" aria-live="polite"></section>
+            <div class="empty-state" id="emptyState">
+                <h3>Списков пока нет</h3>
+                <p>Нажми на кнопку «+» рядом с поиском и создай первый список.</p>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="listModal" aria-hidden="true">
+        <div class="modal__overlay" data-close-list-modal></div>
+        <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="listModalTitle">
+            <div class="modal__header">
+                <h2 id="listModalTitle">Новый список</h2>
+                <button class="icon-btn" data-close-list-modal aria-label="Закрыть">×</button>
+            </div>
+            <form id="listForm" novalidate>
+                <input type="hidden" id="listId">
+                <label>
+                    <span>Название списка *</span>
+                    <input type="text" id="listTitle" maxlength="40" placeholder="Например: Учебный проект">
+                    <small class="error" id="listTitleError"></small>
+                </label>
+                <label>
+                    <span>Категория *</span>
+                    <select id="listCategory"></select>
+                    <small class="error" id="listCategoryError"></small>
+                </label>
+                <button type="submit" class="submit-btn" id="submitListBtn" disabled>Сохранить список</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="taskModal" aria-hidden="true">
+        <div class="modal__overlay" data-close-task-modal></div>
+        <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="taskModalTitle">
+            <div class="modal__header">
+                <h2 id="taskModalTitle">Новая задача</h2>
+                <button class="icon-btn" data-close-task-modal aria-label="Закрыть">×</button>
+            </div>
+            <form id="taskForm" novalidate>
+                <input type="hidden" id="taskId">
+                <input type="hidden" id="taskListId">
+                <label>
+                    <span>Название задачи *</span>
+                    <input type="text" id="taskTitle" maxlength="60" placeholder="Например: подготовить макет">
+                    <small class="error" id="titleError"></small>
+                </label>
+                <label>
+                    <span>Описание</span>
+                    <textarea id="taskDescription" maxlength="220" placeholder="Короткое описание задачи"></textarea>
+                    <small class="hint"><span id="descriptionCounter">0</span>/220 символов</small>
+                </label>
+                <label>
+                    <span>Дедлайн *</span>
+                    <input type="datetime-local" id="taskDeadline">
+                    <small class="error" id="deadlineError"></small>
+                </label>
+                <button type="submit" class="submit-btn" id="submitTaskBtn" disabled>Сохранить задачу</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="settings-modal" id="settingsModal" aria-hidden="true">
+        <div class="settings-modal__overlay" data-close-settings></div>
+        <div class="settings-modal__content" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+            <div class="modal__header">
+                <h2 id="settingsTitle">Настройки</h2>
+                <button class="icon-btn" data-close-settings aria-label="Закрыть">×</button>
+            </div>
+            <section class="settings-profile">
+                <div class="settings-profile__photo" id="settingsProfilePhoto"><div class="avatar skeleton"></div></div>
+                <div>
+                    <h3 id="settingsProfileName">Загрузка...</h3>
+                    <p id="settingsProfileEmail">API профиль</p>
+                </div>
+            </section>
+            <section class="theme-settings" aria-label="Смена темы">
+                <h3>Тема сайта</h3>
+                <div class="theme-options">
+                    <button type="button" class="theme-option is-active" data-theme="light">Светлая</button>
+                    <button type="button" class="theme-option" data-theme="dark">Тёмная</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <template id="listTemplate">
+        <article class="list-column">
+            <div class="list-column__header">
+                <div>
+                    <h3 class="list-title"></h3>
+                    <span class="list-category"></span>
+                </div>
+                <div class="list-actions">
+                    <button class="icon-btn list-menu-btn" title="Действия со списком" aria-expanded="false"><img src="assets/dots.png" alt=""></button>
+                    <div class="list-menu">
+                        <button type="button" class="edit-list">Редактировать</button>
+                        <button type="button" class="delete-list danger-action">Удалить список</button>
+                    </div>
+                </div>
+            </div>
+            <div class="list-tasks"></div>
+        </article>
+    </template>
+
+    <template id="taskTemplate">
+        <article class="task-card">
+            <div class="task-card__top">
+                <label class="check-wrap" title="Отметить выполненной">
+                    <input type="checkbox" class="task-done">
+                    <span></span>
+                </label>
+                <div class="task-main">
+                    <div class="task-title-row">
+                        <h4></h4>
+                        
+                    </div>
+                    <p class="task-description"></p>
+                    <div class="task-meta"></div>
+                </div>
+                <div class="task-actions">
+                    <button class="icon-btn task-menu-btn" title="Действия с задачей" aria-expanded="false"><img src="assets/dots.png" alt=""></button>
+                    <div class="task-menu">
+                        <button type="button" class="edit-task">Редактировать</button>
+                        <button type="button" class="delete-task danger-action">Удалить задачу</button>
+                    </div>
+                </div>
+            </div>
+        </article>
+    </template>
+
+    <script src="script.js"></script>
+</body>
+</html>
