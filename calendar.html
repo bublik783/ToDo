@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ToDo — списки задач</title>
+    <title>ToDo — календарь задач</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -51,10 +51,10 @@
                 </div>
 
                 <nav class="view-switcher" id="viewSwitcher" aria-label="Переключение режима">
-                    <a class="view-switcher__btn is-active" data-view-link="lists" href="index.html" aria-label="Режим списков">
+                    <a class="view-switcher__btn" data-view-link="lists" href="index.html" aria-label="Режим списков">
                         <img src="assets/list-view.png" alt="">
                     </a>
-                    <a class="view-switcher__btn" data-view-link="calendar" href="calendar.html" aria-label="Режим календаря">
+                    <a class="view-switcher__btn is-active" data-view-link="calendar" href="calendar.html" aria-label="Режим календаря">
                         <img src="assets/calendar-view.png" alt="">
                     </a>
                 </nav>
@@ -97,11 +97,9 @@
                 <button class="ghost-btn" id="clearFiltersBtn" type="button">Сбросить</button>
             </section>
 
-            <section class="board" id="board" aria-live="polite"></section>
-            <div class="empty-state" id="emptyState">
-                <h3>Списков пока нет</h3>
-                <p>Нажми на кнопку «+» рядом с поиском и создай первый список.</p>
-            </div>
+            <section class="board" id="board" aria-live="polite" hidden></section>
+<section class="calendar-view" id="calendarView" aria-live="polite"></section>
+            <div class="empty-state" id="emptyState" hidden></div>
         </main>
     </div>
 

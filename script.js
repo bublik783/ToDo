@@ -11,10 +11,14 @@ let categories = JSON.parse(localStorage.getItem(CATEGORY_KEY)) || defaultCatego
 let activeCategory = 'Все';
 let toastTimer = null;
 let userProfile = { name: 'Rauf', email: 'Локальный профиль', photo: null };
-let appSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || { soonDays: 1, soonType: 'days' };
+let activeView = window.location.pathname.endsWith('calendar.html') ? 'calendar' : 'lists';
+let appSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || { soonDays: 1, soonType: 'days', deadlineFormat: 'full' };
+if (!appSettings.deadlineFormat) appSettings.deadlineFormat = 'full';
 
 const elements = {
     board: document.getElementById('board'),
+    calendarView: document.getElementById('calendarView'),
+    viewButtons: document.querySelectorAll('[data-view-link]'),
     emptyState: document.getElementById('emptyState'),
     listTemplate: document.getElementById('listTemplate'),
     taskTemplate: document.getElementById('taskTemplate'),
@@ -31,6 +35,7 @@ const elements = {
     taskId: document.getElementById('taskId'),
     taskListId: document.getElementById('taskListId'),
     taskTitle: document.getElementById('taskTitle'),
+    taskTag: document.getElementById('taskTag'),
     taskDescription: document.getElementById('taskDescription'),
     taskDeadline: document.getElementById('taskDeadline'),
     submitTaskBtn: document.getElementById('submitTaskBtn'),
@@ -39,8 +44,7 @@ const elements = {
     descriptionCounter: document.getElementById('descriptionCounter'),
     searchInput: document.getElementById('searchInput'),
     statusFilter: document.getElementById('statusFilter'),
-    categoryFilter: document.getElementById('categoryFilter'),
-    titleSortToggle: document.getElementById('titleSortToggle'),
+    sortFilter: document.getElementById('sortFilter'),
     userCard: document.getElementById('userCard'),
     apiError: document.getElementById('apiError'),
     menuBtn: document.getElementById('menuBtn'),
@@ -63,10 +67,11 @@ const elements = {
     openListModal: document.getElementById('openListModal'),
     applyFiltersBtn: document.getElementById('applyFiltersBtn'),
     profileHint: document.getElementById('profileHint'),
-    soonDaysInput: document.getElementById('soonDaysInput')
+    soonDaysInput: document.getElementById('soonDaysInput'),
+    deadlineFormatButtons: document.querySelectorAll('[data-deadline-format]')
 };
 
-let appliedFilters = { search: '', status: 'Все', category: 'Все', sortByTitle: false };
+let appliedFilters = { search: '', status: 'Все', sortMode: 'default' };
 
 function uid() {
     return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
@@ -76,6 +81,24 @@ function getFutureDateTime(days) {
     const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
     return date.toISOString().slice(0, 16);
+}
+
+function normalizeTag(value) {
+    return value
+        .trim()
+        .replace(/^#+/, '')
+        .replace(/\s+/g, '-')
+        .replace(/[^А-Яа-яЁёA-Za-z0-9_-]/g, '')
+        .toLowerCase();
+}
+
+function truncateText(text, maxLength = 17) {
+    const value = String(text || '').trim();
+    return value.length > maxLength ? value.slice(0, maxLength) + '...' : value;
+}
+
+function countActiveTasks(tasks) {
+    return tasks.filter(task => !task.done).length;
 }
 
 function saveLists() { localStorage.setItem(LISTS_KEY, JSON.stringify(lists)); }
@@ -139,7 +162,7 @@ function createCategoryRow(category, isSystem) {
 }
 
 function renderListCategoryOptions() {
-    elements.listCategory.innerHTML = '';
+    elements.listCategory.innerHTML = '<option value="">Выберите категорию</option>';
     categories.forEach(category => {
         const option = document.createElement('option');
         option.value = category;
@@ -155,7 +178,11 @@ function selectCategory(category) {
         button.classList.toggle('active', button.dataset.category === category);
     });
     toggleSidebar(true);
-    renderBoard();
+    if (activeView === 'calendar') {
+        renderCalendar();
+    } else {
+        renderBoard();
+    }
 }
 
 function addCategory(event) {
@@ -206,7 +233,7 @@ function openListModal(list = null) {
         document.getElementById('listModalTitle').textContent = 'Новый список';
         elements.listForm.reset();
         elements.listId.value = '';
-        elements.listCategory.value = activeCategory !== 'Все' ? activeCategory : categories[0];
+        elements.listCategory.value = activeCategory !== 'Все' ? activeCategory : '';
     }
     validateListForm();
     elements.listTitle.focus();
@@ -271,6 +298,7 @@ function openTaskModal(listId, task = null) {
         document.getElementById('taskModalTitle').textContent = 'Редактировать задачу';
         elements.taskId.value = task.id;
         elements.taskTitle.value = task.title;
+        if (elements.taskTag) elements.taskTag.value = task.tag || '';
         elements.taskDescription.value = task.description;
         elements.taskDeadline.value = task.deadline;
     } else {
@@ -278,6 +306,7 @@ function openTaskModal(listId, task = null) {
         elements.taskForm.reset();
         elements.taskId.value = '';
         elements.taskListId.value = listId;
+        if (elements.taskTag) elements.taskTag.value = '';
         elements.taskDeadline.value = getFutureDateTime(1);
     }
     elements.descriptionCounter.textContent = elements.taskDescription.value.length;
@@ -308,22 +337,47 @@ function getDeadlineText(task) {
 }
 
 function formatDate(dateString) {
-    return new Date(dateString).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const date = new Date(dateString);
+
+    if (appSettings.deadlineFormat === 'short') {
+        return date.toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            month: 'short'
+        });
+    }
+
+    return date.toLocaleString('ru-RU', {
+        day:'2-digit',
+        month:'2-digit',
+        year:'numeric',
+        hour:'2-digit',
+        minute:'2-digit'
+    });
+}
+
+function getListNearestDeadline(list) {
+    if (!list.tasks || list.tasks.length === 0) return Infinity;
+
+    const deadlines = list.tasks
+        .filter(task => task.deadline)
+        .map(task => new Date(task.deadline).getTime())
+        .filter(time => Number.isFinite(time));
+
+    return deadlines.length ? Math.min(...deadlines) : Infinity;
 }
 
 function getVisibleLists() {
     const search = appliedFilters.search.toLowerCase().trim();
     const status = appliedFilters.status;
-    const filterCategory = appliedFilters.category;
+    const sortMode = appliedFilters.sortMode;
 
     const filteredLists = lists
         .filter(list => activeCategory === 'Все' || list.category === activeCategory)
-        .filter(list => filterCategory === 'Все' || list.category === filterCategory)
         .map(list => {
             const listMatchesSearch = [list.title, list.category].join(' ').toLowerCase().includes(search);
 
-            const tasks = list.tasks.filter(task => {
-                const taskMatchesSearch = [task.title, task.description].join(' ').toLowerCase().includes(search);
+            let tasks = list.tasks.filter(task => {
+                const taskMatchesSearch = [task.title, task.description, task.tag].join(' ').toLowerCase().includes(search);
                 const taskStatus = getDeadlineStatus(task);
                 const matchesStatus = status === 'Все' ||
                     (status === 'active' && !task.done) ||
@@ -333,36 +387,61 @@ function getVisibleLists() {
                 return (listMatchesSearch || taskMatchesSearch || !search) && matchesStatus;
             });
 
+            tasks = sortTasks(tasks, sortMode);
+
             const hasActiveFilters = Boolean(search) || status !== 'Все';
+            const sortIsEnabled = sortMode !== 'default';
+            const shouldHideEmptyBySort = sortIsEnabled && tasks.length === 0;
+
             const shouldShow = hasActiveFilters
-                ? tasks.length > 0 || (listMatchesSearch && status === 'Все')
-                : true;
+                ? tasks.length > 0 || (listMatchesSearch && status === 'Все' && !shouldHideEmptyBySort)
+                : !shouldHideEmptyBySort;
 
             return { ...list, tasks, shouldShow };
         })
         .filter(list => list.shouldShow);
 
-    return sortLists(filteredLists);
+    return sortLists(filteredLists, sortMode);
 }
 
-function sortLists(sourceLists) {
-    return [...sourceLists].sort((a, b) => {
-        if (appliedFilters.sortByTitle) {
-            return a.title.localeCompare(b.title, 'ru');
-        }
-        return 0;
-    });
-}
+function sortLists(sourceLists, mode = 'default') {
+    const copy = [...sourceLists];
 
-function sortTasks(tasks, mode = 'deadline') {
-    const copy = [...tasks];
-    if (mode === 'alpha') {
+    if (mode === 'title') {
         return copy.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
     }
-    if (mode === 'reset') {
+
+    if (mode === 'created') {
         return copy.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
-    return copy.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+
+    if (mode === 'deadline') {
+        return copy.sort((a, b) => getListNearestDeadline(a) - getListNearestDeadline(b));
+    }
+
+    return copy;
+}
+
+function sortTasks(tasks, mode = 'default') {
+    const copy = [...tasks];
+
+    if (mode === 'title') {
+        return copy.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+    }
+
+    if (mode === 'deadline') {
+        return copy.sort((a, b) => {
+            const first = new Date(a.deadline).getTime();
+            const second = new Date(b.deadline).getTime();
+            return (Number.isFinite(first) ? first : Infinity) - (Number.isFinite(second) ? second : Infinity);
+        });
+    }
+
+    if (mode === 'created') {
+        return copy.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+
+    return copy;
 }
 
 
@@ -395,28 +474,216 @@ function sortSingleList(listId, mode = 'deadline') {
     showToast(messages[mode] || 'Список отсортирован');
 }
 
+function getAllVisibleTasks() {
+    return getVisibleLists().flatMap(list => {
+        return list.tasks.map(task => ({
+            ...task,
+            listId: list.id,
+            listTitle: list.title,
+            listCategory: list.category
+        }));
+    });
+}
+
+function getCalendarTasks() {
+    const mode = appliedFilters.sortMode || 'default';
+    const sortMode = mode === 'default' ? 'deadline' : mode;
+    return sortTasks(getAllVisibleTasks(), sortMode);
+}
+
+function groupTasksByDate(tasks) {
+    return tasks.reduce((groups, task) => {
+        const key = task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : 'Без даты';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(task);
+        return groups;
+    }, {});
+}
+
+function formatCalendarDate(dateKey) {
+    if (dateKey === 'Без даты') return dateKey;
+
+    const today = new Date();
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const todayKey = today.toISOString().slice(0, 10);
+    const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+
+    if (dateKey === todayKey) return 'Сегодня';
+    if (dateKey === tomorrowKey) return 'Завтра';
+
+    return new Date(dateKey).toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
+function closeAllCalendarTaskMenus(exceptMenu = null) {
+    document.querySelectorAll('.calendar-task-menu.is-open').forEach(menu => {
+        if (menu !== exceptMenu) menu.classList.remove('is-open');
+    });
+
+    document.querySelectorAll('.calendar-task-menu-btn[aria-expanded="true"]').forEach(button => {
+        if (!exceptMenu || !button.parentElement.contains(exceptMenu)) {
+            button.setAttribute('aria-expanded', 'false');
+        }
+    });
+}
+
+function renderCalendar() {
+    if (!elements.calendarView) return;
+
+    const tasks = getCalendarTasks();
+    const grouped = groupTasksByDate(tasks);
+    const dateKeys = Object.keys(grouped).sort((a, b) => {
+        if (a === 'Без даты') return 1;
+        if (b === 'Без даты') return -1;
+        return new Date(a) - new Date(b);
+    });
+
+    elements.calendarView.innerHTML = '';
+
+    if (dateKeys.length === 0) {
+        elements.calendarView.innerHTML = `
+            <div class="calendar-empty">
+                <h3>В календаре пока нет задач</h3>
+                <p>Создайте задачу с дедлайном или измените фильтр.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const track = document.createElement('div');
+    track.className = 'calendar-track';
+
+    dateKeys.forEach(dateKey => {
+        const day = document.createElement('article');
+        day.className = 'calendar-day-card';
+        day.innerHTML = `
+            <div class="calendar-day-card__head">
+                <div>
+                    <h3>${formatCalendarDate(dateKey)}</h3>
+                    <p>${countActiveTasks(grouped[dateKey])} активн.</p>
+                </div>
+            </div>
+            <div class="calendar-day-card__tasks"></div>
+        `;
+
+        const taskBox = day.querySelector('.calendar-day-card__tasks');
+
+        grouped[dateKey].forEach(task => {
+            const item = document.createElement('article');
+            item.className = `calendar-task-card ${getDeadlineStatus(task)} ${task.done ? 'done' : ''}`;
+            item.innerHTML = `
+                <label class="calendar-check" title="Отметить выполненной">
+                    <input type="checkbox" ${task.done ? 'checked' : ''}>
+                    <span></span>
+                </label>
+                <div class="calendar-task-card__content">
+                    <div class="calendar-task-card__title">
+                        <strong>${truncateText(task.title)}</strong>
+                        ${task.tag ? `<span class="task-tag-badge">#${task.tag}</span>` : ''}
+                    </div>
+                    <p>${task.description ? truncateText(task.description) : 'Без описания'}</p>
+                    <small>${task.listCategory} • ${task.listTitle} • ${formatDate(task.deadline)}</small>
+                </div>
+                <div class="calendar-task-actions">
+                    <button class="icon-btn calendar-task-menu-btn" title="Действия с задачей" aria-expanded="false">
+                        <img src="assets/dots.png" alt="">
+                    </button>
+                    <div class="calendar-task-menu">
+                        <button type="button" class="calendar-edit-task">Редактировать</button>
+                        <button type="button" class="calendar-delete-task danger-action">Удалить задачу</button>
+                    </div>
+                </div>
+            `;
+
+            const checkbox = item.querySelector('input');
+            const menuBtn = item.querySelector('.calendar-task-menu-btn');
+            const menu = item.querySelector('.calendar-task-menu');
+
+            checkbox.addEventListener('change', () => {
+                toggleDone(task.listId, task.id);
+            });
+
+            menuBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                closeAllCalendarTaskMenus(menu);
+                const isOpen = menu.classList.toggle('is-open');
+                menuBtn.setAttribute('aria-expanded', String(isOpen));
+            });
+
+            item.querySelector('.calendar-edit-task').addEventListener('click', () => {
+                closeAllCalendarTaskMenus();
+                openTaskModal(task.listId, lists.find(list => list.id === task.listId)?.tasks.find(item => item.id === task.id));
+            });
+
+            item.querySelector('.calendar-delete-task').addEventListener('click', () => {
+                closeAllCalendarTaskMenus();
+                deleteTask(task.listId, task.id);
+            });
+
+            taskBox.appendChild(item);
+        });
+
+        track.appendChild(day);
+    });
+
+    elements.calendarView.appendChild(track);
+}
+
+function setView(view) {
+    activeView = view;
+
+    elements.viewButtons.forEach(button => {
+        button.classList.toggle('is-active', button.dataset.viewLink === view);
+    });
+
+    if (activeView === 'calendar') {
+        renderCalendar();
+    }
+}
+
 function renderBoard() {
+    if (!elements.board) return;
+
     const visibleLists = getVisibleLists();
     elements.board.innerHTML = '';
-    elements.emptyState.classList.toggle('is-visible', visibleLists.length === 0);
+
+    if (elements.emptyState) {
+        elements.emptyState.classList.toggle('is-visible', visibleLists.length === 0);
+    }
 
     visibleLists.forEach(list => {
         const node = elements.listTemplate.content.cloneNode(true);
         const column = node.querySelector('.list-column');
-        node.querySelector('.list-title').innerHTML = `${list.title} <span class="task-count">${list.tasks.length}</span>`;
+
+        node.querySelector('.list-title').innerHTML = `${truncateText(list.title)} <span class="task-count">${countActiveTasks(list.tasks)}</span>`;
         node.querySelector('.list-category').textContent = list.category;
+
         const menuBtn = node.querySelector('.list-menu-btn');
         const menu = node.querySelector('.list-menu');
+
         menuBtn.addEventListener('click', (event) => {
             event.stopPropagation();
             closeAllListMenus(menu);
             const isOpen = menu.classList.toggle('is-open');
             menuBtn.setAttribute('aria-expanded', String(isOpen));
         });
-        node.querySelector('.edit-list').addEventListener('click', () => { closeAllListMenus(); openListModal(lists.find(item => item.id === list.id)); });
-        node.querySelector('.delete-list').addEventListener('click', () => { closeAllListMenus(); deleteList(list.id); });
+
+        node.querySelector('.edit-list').addEventListener('click', () => {
+            closeAllListMenus();
+            openListModal(lists.find(item => item.id === list.id));
+        });
+
+        node.querySelector('.delete-list').addEventListener('click', () => {
+            closeAllListMenus();
+            deleteList(list.id);
+        });
+
         const taskBox = node.querySelector('.list-tasks');
         const sortedTasks = list.tasks;
+
         if (sortedTasks.length === 0) {
             const emptyButton = document.createElement('button');
             emptyButton.type = 'button';
@@ -426,6 +693,7 @@ function renderBoard() {
             taskBox.appendChild(emptyButton);
         } else {
             sortedTasks.forEach(task => taskBox.appendChild(createTaskNode(list.id, task)));
+
             const addButton = document.createElement('button');
             addButton.type = 'button';
             addButton.className = 'add-task-inline';
@@ -433,6 +701,7 @@ function renderBoard() {
             addButton.addEventListener('click', () => openTaskModal(list.id));
             taskBox.appendChild(addButton);
         }
+
         elements.board.appendChild(column);
     });
 }
@@ -443,8 +712,15 @@ function createTaskNode(listId, task) {
     const status = getDeadlineStatus(task);
     card.classList.add(status);
     if (task.done) card.classList.add('done');
-    node.querySelector('h4').textContent = task.title;
-    node.querySelector('.task-description').textContent = task.description || 'Без описания';
+    node.querySelector('h4').textContent = truncateText(task.title);
+    const tagBadge = node.querySelector('.task-tag-badge');
+    if (tagBadge && task.tag) {
+        tagBadge.textContent = `#${task.tag}`;
+        tagBadge.hidden = false;
+    } else if (tagBadge) {
+        tagBadge.hidden = true;
+    }
+    node.querySelector('.task-description').textContent = task.description ? truncateText(task.description) : 'Без описания';
     node.querySelector('.task-done').checked = task.done;
     node.querySelector('.task-meta').innerHTML = `
         <span class="badge">${formatDate(task.deadline)}</span>
@@ -498,6 +774,7 @@ function createOrUpdateTask(event) {
     const listId = elements.taskListId.value;
     const data = {
         title: elements.taskTitle.value.trim(),
+        tag: elements.taskTag ? normalizeTag(elements.taskTag.value) : '',
         description: elements.taskDescription.value.trim(),
         deadline: elements.taskDeadline.value
     };
@@ -515,16 +792,36 @@ function createOrUpdateTask(event) {
 }
 
 function toggleDone(listId, taskId) {
-    lists = lists.map(list => list.id === listId ? { ...list, tasks: list.tasks.map(task => task.id === taskId ? { ...task, done: !task.done } : task) } : list);
+    lists = lists.map(list => list.id === listId ? {
+        ...list,
+        tasks: list.tasks.map(task => task.id === taskId ? { ...task, done: !task.done } : task)
+    } : list);
+
     saveLists();
-    renderBoard();
+
+    if (activeView === 'calendar') {
+        renderCalendar();
+    } else {
+        renderBoard();
+    }
 }
 
 function deleteTask(listId, taskId) {
     if (!confirm('Удалить задачу?')) return;
-    lists = lists.map(list => list.id === listId ? { ...list, tasks: list.tasks.filter(task => task.id !== taskId) } : list);
+
+    lists = lists.map(list => list.id === listId ? {
+        ...list,
+        tasks: list.tasks.filter(task => task.id !== taskId)
+    } : list);
+
     saveLists();
-    renderBoard();
+
+    if (activeView === 'calendar') {
+        renderCalendar();
+    } else {
+        renderBoard();
+    }
+
     showToast('Задача удалена');
 }
 
@@ -532,10 +829,15 @@ function applyFilters() {
     appliedFilters = {
         search: elements.searchInput.value,
         status: elements.statusFilter.value,
-        category: elements.categoryFilter.value,
-        sortByTitle: elements.titleSortToggle.checked
+        sortMode: elements.sortFilter.value
     };
-    renderBoard();
+
+    if (activeView === 'calendar') {
+        renderCalendar();
+    } else {
+        renderBoard();
+    }
+
     elements.filtersPanel.classList.remove('is-open');
     elements.toggleFiltersBtn.setAttribute('aria-expanded', 'false');
 }
@@ -544,12 +846,16 @@ function clearFilters() {
     activeCategory = 'Все';
     elements.searchInput.value = '';
     elements.statusFilter.value = 'Все';
-    elements.categoryFilter.value = 'Все';
-    elements.titleSortToggle.checked = false;
-    appliedFilters = { search: '', status: 'Все', category: 'Все', sortByTitle: false };
+    elements.sortFilter.value = 'default';
+    appliedFilters = { search: '', status: 'Все', sortMode: 'default' };
     elements.currentCategoryTitle.textContent = 'Все списки';
     renderCategories();
-    renderBoard();
+
+    if (activeView === 'calendar') {
+        renderCalendar();
+    } else {
+        renderBoard();
+    }
 }
 
 function renderProfile() {
@@ -582,6 +888,26 @@ function updateDeadlineSettings() {
     saveSettings();
     renderBoard();
     showToast('Настройки сроков сохранены');
+}
+
+function applyDeadlineFormat(format) {
+    appSettings.deadlineFormat = format;
+    saveSettings();
+
+    elements.deadlineFormatButtons.forEach(button => {
+        button.classList.toggle('is-active', button.dataset.deadlineFormat === format);
+    });
+
+    renderBoard();
+}
+
+function initDeadlineFormat() {
+    if (!elements.deadlineFormatButtons) return;
+
+    elements.deadlineFormatButtons.forEach(button => {
+        button.classList.toggle('is-active', button.dataset.deadlineFormat === appSettings.deadlineFormat);
+        button.addEventListener('click', () => applyDeadlineFormat(button.dataset.deadlineFormat));
+    });
 }
 
 function applyTheme(theme) {
@@ -620,8 +946,14 @@ function toggleFilters() {
     elements.toggleFiltersBtn.setAttribute('aria-expanded', String(isOpen));
 }
 
+function initViewMode() {
+    elements.viewButtons.forEach(button => {
+        button.classList.toggle('is-active', button.dataset.viewLink === activeView);
+    });
+}
+
 function bindEvents() {
-    elements.openListModal.addEventListener('click', () => openListModal());
+    if (elements.openListModal) elements.openListModal.addEventListener('click', () => openListModal());
     elements.listForm.addEventListener('submit', createOrUpdateList);
     elements.listTitle.addEventListener('input', validateListForm);
     elements.listCategory.addEventListener('change', validateListForm);
@@ -632,6 +964,11 @@ function bindEvents() {
         field.addEventListener('blur', validateTaskForm);
         field.addEventListener('input', validateTaskForm);
     });
+    if (elements.taskTag) {
+        elements.taskTag.addEventListener('input', () => {
+            elements.taskTag.value = normalizeTag(elements.taskTag.value);
+        });
+    }
     elements.taskDescription.addEventListener('input', () => elements.descriptionCounter.textContent = elements.taskDescription.value.length);
     document.querySelectorAll('[data-close-task-modal]').forEach(button => button.addEventListener('click', closeTaskModal));
 
@@ -649,9 +986,16 @@ function bindEvents() {
     document.querySelectorAll('[data-theme]').forEach(button => button.addEventListener('click', () => applyTheme(button.dataset.theme)));
     if (elements.soonDaysInput) elements.soonDaysInput.addEventListener('change', updateDeadlineSettings);
 
-    elements.searchInput.addEventListener('input', () => { appliedFilters.search = elements.searchInput.value; renderBoard(); });
+    elements.searchInput.addEventListener('input', () => {
+        appliedFilters.search = elements.searchInput.value;
+        if (activeView === 'calendar') {
+            renderCalendar();
+        } else {
+            renderBoard();
+        }
+    });
     elements.applyFiltersBtn.addEventListener('click', applyFilters);
-    document.addEventListener('click', () => { closeAllListMenus(); closeAllTaskMenus(); elements.profileHint.classList.remove('is-visible'); });
+    document.addEventListener('click', () => { closeAllListMenus(); closeAllTaskMenus(); closeAllCalendarTaskMenus(); elements.profileHint.classList.remove('is-visible'); });
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             closeListModal(); closeTaskModal(); closeSettings(); toggleSidebar(true);
@@ -662,16 +1006,15 @@ function bindEvents() {
 }
 
 initTheme();
+initViewMode();
+initDeadlineFormat();
 initDeadlineSettings();
 renderCategories();
 loadUserProfile();
 bindEvents();
-renderBoard();
 
-
-elements.soonTypeSelect.value = appSettings.soonType || 'days';
-
-elements.soonTypeSelect.addEventListener('change', () => {
-    appSettings.soonType = elements.soonTypeSelect.value;
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
-});
+if (activeView === 'calendar') {
+    renderCalendar();
+} else {
+    renderBoard();
+}
