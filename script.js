@@ -101,6 +101,46 @@ function countActiveTasks(tasks) {
     return tasks.filter(task => !task.done).length;
 }
 
+function resolveContainer(containerOrSelector) {
+    if (typeof containerOrSelector === 'string') {
+        return document.querySelector(containerOrSelector) || document.getElementById(containerOrSelector);
+    }
+
+    return containerOrSelector;
+}
+
+function clearContainer(containerOrSelector) {
+    const container = resolveContainer(containerOrSelector);
+    if (!container) return null;
+
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    return container;
+}
+
+function createImage(src, alt = '') {
+    const image = document.createElement('img');
+    image.src = src;
+    image.alt = alt;
+    return image;
+}
+
+function createOption(value, text) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    return option;
+}
+
+function createBadge(text) {
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = text;
+    return badge;
+}
+
 function saveLists() { localStorage.setItem(LISTS_KEY, JSON.stringify(lists)); }
 function saveCategories() { localStorage.setItem(CATEGORY_KEY, JSON.stringify(categories)); }
 function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings)); }
@@ -112,25 +152,30 @@ function showToast(message) {
     toastTimer = setTimeout(() => elements.toast.classList.remove('is-visible'), 2200);
 }
 
-function renderCategories() {
-    elements.categoryNav.innerHTML = '';
-    elements.categoryNav.appendChild(createCategoryRow('Все', true));
-    categories.forEach(category => elements.categoryNav.appendChild(createCategoryRow(category, false)));
-    renderListCategoryOptions();
-    renderFilterCategoryOptions();
+function renderCategories(container = elements.categoryNav) {
+    const categoryContainer = clearContainer(container);
+    if (!categoryContainer) return;
+
+    categoryContainer.appendChild(createCategoryRow('Все', true));
+    categories.forEach(category => categoryContainer.appendChild(createCategoryRow(category, false)));
+
+    renderListCategoryOptions(elements.listCategory);
+    renderFilterCategoryOptions(elements.categoryFilter);
 }
 
-function renderFilterCategoryOptions() {
-    if (!elements.categoryFilter) return;
-    const current = elements.categoryFilter.value || appliedFilters.category || 'Все';
-    elements.categoryFilter.innerHTML = '<option value="Все">Все категории</option>';
+function renderFilterCategoryOptions(container = elements.categoryFilter) {
+    const filterContainer = resolveContainer(container);
+    if (!filterContainer) return;
+
+    const current = filterContainer.value || appliedFilters.category || 'Все';
+    clearContainer(filterContainer);
+
+    filterContainer.appendChild(createOption('Все', 'Все категории'));
     categories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category;
-        option.textContent = category;
-        elements.categoryFilter.appendChild(option);
+        filterContainer.appendChild(createOption(category, category));
     });
-    elements.categoryFilter.value = categories.includes(current) ? current : 'Все';
+
+    filterContainer.value = categories.includes(current) ? current : 'Все';
 }
 
 
@@ -149,7 +194,7 @@ function createCategoryRow(category, isSystem) {
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-category';
     deleteButton.type = 'button';
-    deleteButton.innerHTML = '<img src="assets/trash.png" alt="">';
+    deleteButton.appendChild(createImage('assets/trash.png'));
     deleteButton.disabled = isSystem;
     deleteButton.title = `Удалить категорию ${category}`;
     deleteButton.addEventListener('click', event => {
@@ -161,13 +206,13 @@ function createCategoryRow(category, isSystem) {
     return row;
 }
 
-function renderListCategoryOptions() {
-    elements.listCategory.innerHTML = '<option value="">Выберите категорию</option>';
+function renderListCategoryOptions(container = elements.listCategory) {
+    const listCategoryContainer = clearContainer(container);
+    if (!listCategoryContainer) return;
+
+    listCategoryContainer.appendChild(createOption('', 'Выберите категорию'));
     categories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category;
-        option.textContent = category;
-        elements.listCategory.appendChild(option);
+        listCategoryContainer.appendChild(createOption(category, category));
     });
 }
 
@@ -530,8 +575,140 @@ function closeAllCalendarTaskMenus(exceptMenu = null) {
     });
 }
 
-function renderCalendar() {
-    if (!elements.calendarView) return;
+function createCalendarEmpty() {
+    const empty = document.createElement('div');
+    empty.className = 'calendar-empty';
+
+    const title = document.createElement('h3');
+    title.textContent = 'В календаре пока нет задач';
+
+    const text = document.createElement('p');
+    text.textContent = 'Создайте задачу с дедлайном или измените фильтр.';
+
+    empty.append(title, text);
+    return empty;
+}
+
+function createCalendarTaskCard(task) {
+    const item = document.createElement('article');
+    item.className = `calendar-task-card ${getDeadlineStatus(task)} ${task.done ? 'done' : ''}`;
+
+    const checkLabel = document.createElement('label');
+    checkLabel.className = 'calendar-check';
+    checkLabel.title = 'Отметить выполненной';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = task.done;
+
+    const checkBoxView = document.createElement('span');
+    checkLabel.append(checkbox, checkBoxView);
+
+    const content = document.createElement('div');
+    content.className = 'calendar-task-card__content';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'calendar-task-card__title';
+
+    const title = document.createElement('strong');
+    title.textContent = truncateText(task.title);
+    titleRow.appendChild(title);
+
+    if (task.tag) {
+        const tag = document.createElement('span');
+        tag.className = 'task-tag-badge';
+        tag.textContent = `#${task.tag}`;
+        titleRow.appendChild(tag);
+    }
+
+    const description = document.createElement('p');
+    description.textContent = task.description ? truncateText(task.description) : 'Без описания';
+
+    const meta = document.createElement('small');
+    meta.textContent = `${task.listCategory} • ${task.listTitle} • ${formatDate(task.deadline)}`;
+
+    content.append(titleRow, description, meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'calendar-task-actions';
+
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'icon-btn calendar-task-menu-btn';
+    menuBtn.title = 'Действия с задачей';
+    menuBtn.setAttribute('aria-expanded', 'false');
+    menuBtn.appendChild(createImage('assets/dots.png'));
+
+    const menu = document.createElement('div');
+    menu.className = 'calendar-task-menu';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'calendar-edit-task';
+    editBtn.textContent = 'Редактировать';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'calendar-delete-task danger-action';
+    deleteBtn.textContent = 'Удалить задачу';
+
+    menu.append(editBtn, deleteBtn);
+    actions.append(menuBtn, menu);
+    item.append(checkLabel, content, actions);
+
+    checkbox.addEventListener('change', () => {
+        toggleDone(task.listId, task.id);
+    });
+
+    menuBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        closeAllCalendarTaskMenus(menu);
+        const isOpen = menu.classList.toggle('is-open');
+        menuBtn.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    editBtn.addEventListener('click', () => {
+        closeAllCalendarTaskMenus();
+        openTaskModal(task.listId, lists.find(list => list.id === task.listId)?.tasks.find(item => item.id === task.id));
+    });
+
+    deleteBtn.addEventListener('click', () => {
+        closeAllCalendarTaskMenus();
+        deleteTask(task.listId, task.id);
+    });
+
+    return item;
+}
+
+function createCalendarDayCard(dateKey, tasks) {
+    const day = document.createElement('article');
+    day.className = 'calendar-day-card';
+
+    const head = document.createElement('div');
+    head.className = 'calendar-day-card__head';
+
+    const headContent = document.createElement('div');
+
+    const title = document.createElement('h3');
+    title.textContent = formatCalendarDate(dateKey);
+
+    const count = document.createElement('p');
+    count.textContent = `${countActiveTasks(tasks)} активн.`;
+
+    headContent.append(title, count);
+    head.appendChild(headContent);
+
+    const taskBox = document.createElement('div');
+    taskBox.className = 'calendar-day-card__tasks';
+
+    tasks.forEach(task => taskBox.appendChild(createCalendarTaskCard(task)));
+
+    day.append(head, taskBox);
+    return day;
+}
+
+function renderCalendar(container = elements.calendarView) {
+    const calendarContainer = clearContainer(container);
+    if (!calendarContainer) return;
 
     const tasks = getCalendarTasks();
     const grouped = groupTasksByDate(tasks);
@@ -541,15 +718,8 @@ function renderCalendar() {
         return new Date(a) - new Date(b);
     });
 
-    elements.calendarView.innerHTML = '';
-
     if (dateKeys.length === 0) {
-        elements.calendarView.innerHTML = `
-            <div class="calendar-empty">
-                <h3>В календаре пока нет задач</h3>
-                <p>Создайте задачу с дедлайном или измените фильтр.</p>
-            </div>
-        `;
+        calendarContainer.appendChild(createCalendarEmpty());
         return;
     }
 
@@ -557,79 +727,10 @@ function renderCalendar() {
     track.className = 'calendar-track';
 
     dateKeys.forEach(dateKey => {
-        const day = document.createElement('article');
-        day.className = 'calendar-day-card';
-        day.innerHTML = `
-            <div class="calendar-day-card__head">
-                <div>
-                    <h3>${formatCalendarDate(dateKey)}</h3>
-                    <p>${countActiveTasks(grouped[dateKey])} активн.</p>
-                </div>
-            </div>
-            <div class="calendar-day-card__tasks"></div>
-        `;
-
-        const taskBox = day.querySelector('.calendar-day-card__tasks');
-
-        grouped[dateKey].forEach(task => {
-            const item = document.createElement('article');
-            item.className = `calendar-task-card ${getDeadlineStatus(task)} ${task.done ? 'done' : ''}`;
-            item.innerHTML = `
-                <label class="calendar-check" title="Отметить выполненной">
-                    <input type="checkbox" ${task.done ? 'checked' : ''}>
-                    <span></span>
-                </label>
-                <div class="calendar-task-card__content">
-                    <div class="calendar-task-card__title">
-                        <strong>${truncateText(task.title)}</strong>
-                        ${task.tag ? `<span class="task-tag-badge">#${task.tag}</span>` : ''}
-                    </div>
-                    <p>${task.description ? truncateText(task.description) : 'Без описания'}</p>
-                    <small>${task.listCategory} • ${task.listTitle} • ${formatDate(task.deadline)}</small>
-                </div>
-                <div class="calendar-task-actions">
-                    <button class="icon-btn calendar-task-menu-btn" title="Действия с задачей" aria-expanded="false">
-                        <img src="assets/dots.png" alt="">
-                    </button>
-                    <div class="calendar-task-menu">
-                        <button type="button" class="calendar-edit-task">Редактировать</button>
-                        <button type="button" class="calendar-delete-task danger-action">Удалить задачу</button>
-                    </div>
-                </div>
-            `;
-
-            const checkbox = item.querySelector('input');
-            const menuBtn = item.querySelector('.calendar-task-menu-btn');
-            const menu = item.querySelector('.calendar-task-menu');
-
-            checkbox.addEventListener('change', () => {
-                toggleDone(task.listId, task.id);
-            });
-
-            menuBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                closeAllCalendarTaskMenus(menu);
-                const isOpen = menu.classList.toggle('is-open');
-                menuBtn.setAttribute('aria-expanded', String(isOpen));
-            });
-
-            item.querySelector('.calendar-edit-task').addEventListener('click', () => {
-                closeAllCalendarTaskMenus();
-                openTaskModal(task.listId, lists.find(list => list.id === task.listId)?.tasks.find(item => item.id === task.id));
-            });
-
-            item.querySelector('.calendar-delete-task').addEventListener('click', () => {
-                closeAllCalendarTaskMenus();
-                deleteTask(task.listId, task.id);
-            });
-
-            taskBox.appendChild(item);
-        });
-
-        track.appendChild(day);
+        track.appendChild(createCalendarDayCard(dateKey, grouped[dateKey]));
     });
 
-    elements.calendarView.appendChild(track);
+    calendarContainer.appendChild(track);
 }
 
 function setView(view) {
@@ -644,11 +745,11 @@ function setView(view) {
     }
 }
 
-function renderBoard() {
-    if (!elements.board) return;
+function renderBoard(container = elements.board) {
+    const boardContainer = clearContainer(container);
+    if (!boardContainer) return;
 
     const visibleLists = getVisibleLists();
-    elements.board.innerHTML = '';
 
     if (elements.emptyState) {
         elements.emptyState.classList.toggle('is-visible', visibleLists.length === 0);
@@ -658,7 +759,14 @@ function renderBoard() {
         const node = elements.listTemplate.content.cloneNode(true);
         const column = node.querySelector('.list-column');
 
-        node.querySelector('.list-title').innerHTML = `${truncateText(list.title)} <span class="task-count">${countActiveTasks(list.tasks)}</span>`;
+        const listTitle = node.querySelector('.list-title');
+        listTitle.textContent = truncateText(list.title);
+
+        const count = document.createElement('span');
+        count.className = 'task-count';
+        count.textContent = countActiveTasks(list.tasks);
+        listTitle.append(' ', count);
+
         node.querySelector('.list-category').textContent = list.category;
 
         const menuBtn = node.querySelector('.list-menu-btn');
@@ -702,7 +810,7 @@ function renderBoard() {
             taskBox.appendChild(addButton);
         }
 
-        elements.board.appendChild(column);
+        boardContainer.appendChild(column);
     });
 }
 
@@ -712,7 +820,9 @@ function createTaskNode(listId, task) {
     const status = getDeadlineStatus(task);
     card.classList.add(status);
     if (task.done) card.classList.add('done');
+
     node.querySelector('h4').textContent = truncateText(task.title);
+
     const tagBadge = node.querySelector('.task-tag-badge');
     if (tagBadge && task.tag) {
         tagBadge.textContent = `#${task.tag}`;
@@ -720,22 +830,29 @@ function createTaskNode(listId, task) {
     } else if (tagBadge) {
         tagBadge.hidden = true;
     }
+
     node.querySelector('.task-description').textContent = task.description ? truncateText(task.description) : 'Без описания';
     node.querySelector('.task-done').checked = task.done;
-    node.querySelector('.task-meta').innerHTML = `
-        <span class="badge">${formatDate(task.deadline)}</span>
-    `;
+
+    const meta = clearContainer(node.querySelector('.task-meta'));
+    if (meta) {
+        meta.appendChild(createBadge(formatDate(task.deadline)));
+    }
+
     const menuBtn = node.querySelector('.task-menu-btn');
     const menu = node.querySelector('.task-menu');
+
     menuBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         closeAllTaskMenus(menu);
         const isOpen = menu.classList.toggle('is-open');
         menuBtn.setAttribute('aria-expanded', String(isOpen));
     });
+
     node.querySelector('.task-done').addEventListener('change', () => toggleDone(listId, task.id));
     node.querySelector('.edit-task').addEventListener('click', () => { closeAllTaskMenus(); openTaskModal(listId, task); });
     node.querySelector('.delete-task').addEventListener('click', () => { closeAllTaskMenus(); deleteTask(listId, task.id); });
+
     return node;
 }
 
@@ -859,13 +976,25 @@ function clearFilters() {
 }
 
 function renderProfile() {
+    clearContainer(elements.userCard);
+    clearContainer(elements.settingsProfilePhoto);
+
     if (userProfile.photo) {
-        elements.userCard.innerHTML = `<img src="${userProfile.photo}" alt="Аватар пользователя">`;
-        elements.settingsProfilePhoto.innerHTML = `<img src="${userProfile.photo}" alt="Аватар пользователя">`;
+        elements.userCard.appendChild(createImage(userProfile.photo, 'Аватар пользователя'));
+        elements.settingsProfilePhoto.appendChild(createImage(userProfile.photo, 'Аватар пользователя'));
     } else {
-        elements.userCard.innerHTML = '<div class="avatar">R</div>';
-        elements.settingsProfilePhoto.innerHTML = '<div class="avatar">R</div>';
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = 'R';
+
+        const settingsAvatar = document.createElement('div');
+        settingsAvatar.className = 'avatar';
+        settingsAvatar.textContent = 'R';
+
+        elements.userCard.appendChild(avatar);
+        elements.settingsProfilePhoto.appendChild(settingsAvatar);
     }
+
     elements.settingsProfileName.textContent = userProfile.name;
     elements.settingsProfileEmail.textContent = userProfile.email;
 }
