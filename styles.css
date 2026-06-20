@@ -1191,3 +1191,117 @@ body.dark-theme .task-tag-badge {
 .calendar-task-menu .danger-action {
     color: #d93025;
 }
+
+
+/* Исправление читаемости настроек в тёмной теме */
+.dark-theme .settings-modal__content {
+    background: #161b22 !important;
+    color: #f1f5f9 !important;
+}
+
+.dark-theme .settings-modal .modal__header h2,
+.dark-theme .settings-modal h3 {
+    color: #f8fafc !important;
+}
+
+.dark-theme .settings-modal .icon-btn[data-close-settings] {
+    color: #f8fafc !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    font-size: 1.35rem !important;
+    font-weight: 700 !important;
+    opacity: 0.95 !important;
+}
+
+.dark-theme .settings-modal .icon-btn[data-close-settings]:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.dark-theme .settings-profile {
+    background: #242b36 !important;
+    color: #f8fafc !important;
+}
+
+.dark-theme .settings-profile h3 {
+    color: #f8fafc !important;
+}
+
+.dark-theme .settings-profile p {
+    color: #cbd5e1 !important;
+}
+
+.dark-theme .theme-option {
+    background: transparent !important;
+    color: #e2e8f0 !important;
+    border-color: #475569 !important;
+    font-weight: 700 !important;
+}
+
+.dark-theme .theme-option:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border-color: #64748b !important;
+}
+
+.dark-theme .theme-option.is-active {
+    background: #1a73e8 !important;
+    color: #ffffff !important;
+    border-color: #8ab4f8 !important;
+    box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.35) !important;
+}
+
+.dark-theme .deadline-format-settings {
+    border-top-color: #334155 !important;
+}
+
+
+
+
+
+
+/* SVG-иконки: контраст для светлой, тёмной темы и активного режима */
+.icon-btn img,
+.settings-btn img,
+.filter-icon-btn img,
+.view-switcher__btn img,
+.list-menu-btn img,
+.task-menu-btn img,
+.calendar-task-menu-btn img,
+.delete-category img {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: block;
+    object-fit: contain;
+}
+
+/* Светлая тема: иконки чёрные */
+body:not(.dark-theme) .icon-btn img,
+body:not(.dark-theme) .settings-btn img,
+body:not(.dark-theme) .filter-icon-btn img,
+body:not(.dark-theme) .view-switcher__btn img,
+body:not(.dark-theme) .list-menu-btn img,
+body:not(.dark-theme) .task-menu-btn img,
+body:not(.dark-theme) .calendar-task-menu-btn img,
+body:not(.dark-theme) .delete-category img {
+    filter: brightness(0) saturate(100%) !important;
+}
+
+/* Тёмная тема: иконки белые */
+.dark-theme .icon-btn img,
+.dark-theme .settings-btn img,
+.dark-theme .filter-icon-btn img,
+.dark-theme .view-switcher__btn img,
+.dark-theme .list-menu-btn img,
+.dark-theme .task-menu-btn img,
+.dark-theme .calendar-task-menu-btn img,
+.dark-theme .delete-category img {
+    filter: brightness(0) invert(1) !important;
+}
+
+/* Активный синий кружок в любой теме: иконка белая */
+.view-switcher__btn.is-active img,
+body:not(.dark-theme) .view-switcher__btn.is-active img,
+.dark-theme .view-switcher__btn.is-active img {
+    filter: brightness(0) invert(1) !important;
+}

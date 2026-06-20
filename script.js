@@ -127,6 +127,13 @@ function createImage(src, alt = '') {
     return image;
 }
 
+function createSvgIcon(iconName) {
+    const icon = document.createElement('span');
+    icon.className = `icon-svg icon-${iconName}`;
+    icon.setAttribute('aria-hidden', 'true');
+    return icon;
+}
+
 function createOption(value, text) {
     const option = document.createElement('option');
     option.value = value;
@@ -194,7 +201,7 @@ function createCategoryRow(category, isSystem) {
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-category';
     deleteButton.type = 'button';
-    deleteButton.appendChild(createImage('assets/trash.png'));
+    deleteButton.appendChild(createImage('assets/delete.svg'));
     deleteButton.disabled = isSystem;
     deleteButton.title = `Удалить категорию ${category}`;
     deleteButton.addEventListener('click', event => {
@@ -636,7 +643,7 @@ function createCalendarTaskCard(task) {
     menuBtn.className = 'icon-btn calendar-task-menu-btn';
     menuBtn.title = 'Действия с задачей';
     menuBtn.setAttribute('aria-expanded', 'false');
-    menuBtn.appendChild(createImage('assets/dots.png'));
+    menuBtn.appendChild(createImage('assets/dots.svg'));
 
     const menu = document.createElement('div');
     menu.className = 'calendar-task-menu';
