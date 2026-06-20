@@ -1260,21 +1260,6 @@ body.dark-theme .task-tag-badge {
 
 
 
-/* SVG-иконки: контраст для светлой, тёмной темы и активного режима */
-.icon-btn img,
-.settings-btn img,
-.filter-icon-btn img,
-.view-switcher__btn img,
-.list-menu-btn img,
-.task-menu-btn img,
-.calendar-task-menu-btn img,
-.delete-category img {
-    width: 1.25rem;
-    height: 1.25rem;
-    display: block;
-    object-fit: contain;
-}
-
 /* Светлая тема: иконки чёрные */
 body:not(.dark-theme) .icon-btn img,
 body:not(.dark-theme) .settings-btn img,
@@ -1304,4 +1289,112 @@ body:not(.dark-theme) .delete-category img {
 body:not(.dark-theme) .view-switcher__btn.is-active img,
 .dark-theme .view-switcher__btn.is-active img {
     filter: brightness(0) invert(1) !important;
+}
+
+
+/* FINAL FIX: читаемость тёмной темы и SVG-иконок */
+body.dark-theme .settings-modal__content {
+    background: #161b22 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-theme .settings-modal h2,
+body.dark-theme .settings-modal h3,
+body.dark-theme .settings-modal p,
+body.dark-theme .settings-modal span {
+    color: #f8fafc !important;
+}
+
+body.dark-theme .settings-profile {
+    background: #242b36 !important;
+}
+
+body.dark-theme .settings-profile p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-theme .theme-option {
+    background: transparent !important;
+    color: #f1f5f9 !important;
+    border-color: #64748b !important;
+    font-weight: 700 !important;
+}
+
+body.dark-theme .theme-option:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border-color: #94a3b8 !important;
+}
+
+body.dark-theme .theme-option.is-active {
+    background: #1a73e8 !important;
+    color: #ffffff !important;
+    border-color: #ffffff !important;
+    box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.35) !important;
+}
+
+body.dark-theme .modal__header .icon-btn,
+body.dark-theme [data-close-settings] {
+    color: #ffffff !important;
+    font-size: 1.35rem !important;
+    opacity: 1 !important;
+}
+
+/* Размеры SVG-иконок */
+.icon-btn img,
+.settings-btn img,
+.filter-icon-btn img,
+.view-switcher__btn img,
+.list-menu-btn img,
+.task-menu-btn img,
+.calendar-task-menu-btn img,
+.delete-category img {
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+    display: block !important;
+    object-fit: contain !important;
+}
+
+/* Светлая тема: иконки чёрные */
+body:not(.dark-theme) .icon-btn img,
+body:not(.dark-theme) .settings-btn img,
+body:not(.dark-theme) .filter-icon-btn img,
+body:not(.dark-theme) .view-switcher__btn img,
+body:not(.dark-theme) .list-menu-btn img,
+body:not(.dark-theme) .task-menu-btn img,
+body:not(.dark-theme) .calendar-task-menu-btn img,
+body:not(.dark-theme) .delete-category img {
+    filter: brightness(0) saturate(100%) !important;
+    opacity: 0.95 !important;
+}
+
+/* Тёмная тема: иконки белые */
+body.dark-theme .icon-btn img,
+body.dark-theme .settings-btn img,
+body.dark-theme .filter-icon-btn img,
+body.dark-theme .view-switcher__btn img,
+body.dark-theme .list-menu-btn img,
+body.dark-theme .task-menu-btn img,
+body.dark-theme .calendar-task-menu-btn img,
+body.dark-theme .delete-category img {
+    filter: brightness(0) invert(1) !important;
+    opacity: 1 !important;
+}
+
+/* Активный синий режим: белая иконка в любой теме */
+.view-switcher__btn.is-active img,
+body.dark-theme .view-switcher__btn.is-active img,
+body:not(.dark-theme) .view-switcher__btn.is-active img {
+    filter: brightness(0) invert(1) !important;
+    opacity: 1 !important;
+}
+
+/* Кнопки режимов в тёмной теме */
+body.dark-theme .view-switcher__btn {
+    color: #f8fafc !important;
+}
+
+body.dark-theme .view-switcher__btn.is-active {
+    background: #1a73e8 !important;
+    color: #ffffff !important;
 }
